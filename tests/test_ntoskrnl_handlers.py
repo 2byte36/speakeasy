@@ -2,6 +2,7 @@ import struct
 
 import pytest
 
+import speakeasy.common as common
 import speakeasy.winenv.arch as _arch
 import speakeasy.winenv.defs.nt.ddk as ddk
 import speakeasy.winenv.defs.nt.ntoskrnl as ntdefs
@@ -179,6 +180,28 @@ def test_zw_map_view_of_section_maps_the_whole_section_without_a_view_size(drive
     assert rv == ddk.STATUS_SUCCESS
     view = int.from_bytes(driver_emu.mem_read(base, 4), "little")
     driver_emu.mem_write(view + 0x1FFF, b"\x01")
+
+
+def test_zw_allocate_virtual_memory_applies_page_protection(driver64_emu: Speakeasy) -> None:
+    base_slot = alloc(driver64_emu, b"\x00" * 8)
+    size_slot = alloc(driver64_emu, (0x3000).to_bytes(8, "little"))
+    current_process = (1 << (driver64_emu.get_ptr_size() * 8)) - 1
+
+    rv, _ = call(
+        driver64_emu,
+        "ntoskrnl",
+        "ZwAllocateVirtualMemory",
+        [current_process, base_slot, 0, size_slot, 0x3000, 0x04],
+    )
+
+    assert rv == ddk.STATUS_SUCCESS
+    base = int.from_bytes(driver64_emu.mem_read(base_slot, 8), "little")
+    mapping = driver64_emu.emu.get_address_map(base)
+    assert mapping is not None
+    assert mapping.prot == common.PERM_MEM_RW
+    assert mapping.flags == 0x04
+    driver64_emu.mem_write(base, b"writable")
+    assert driver64_emu.mem_read(base, 8) == b"writable"
 
 
 def read_unicode_string_x86(se: Speakeasy, addr: int) -> tuple[int, int, bytes]:

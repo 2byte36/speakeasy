@@ -1504,7 +1504,14 @@ class Ntoskrnl(api.ApiHandler):
 
         base = self.mem_read(BaseAddress, emu.get_ptr_size())
         base = int.from_bytes(base, "little")
-        base = self.mem_alloc(size, tag=f"api.virtalloc.{obj.image}", process=obj)
+        emu_perms = self.win_perms_to_emu_perms(Protect)
+        base = self.mem_alloc(
+            size,
+            tag=f"api.virtalloc.{obj.image}",
+            flags=Protect,
+            perms=emu_perms,
+            process=obj,
+        )
 
         emu._set_dyn_code_hook(base, size)
 
